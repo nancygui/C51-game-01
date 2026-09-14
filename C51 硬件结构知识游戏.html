@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>51单片机知识消消乐 · 硬件结构闯关</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='52' height='52' rx='10' fill='%230B1220'/%3E%3Crect x='14' y='14' width='36' height='36' rx='6' fill='%2322D3EE'/%3E%3Ccircle cx='22' cy='22' r='4' fill='%230B1220'/%3E%3Ccircle cx='42' cy='22' r='4' fill='%230B1220'/%3E%3Ccircle cx='22' cy='42' r='4' fill='%230B1220'/%3E%3Ccircle cx='42' cy='42' r='4' fill='%230B1220'/%3E%3Crect x='30' y='30' width='4' height='4' fill='%230B1220'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<style>
+:root{
+  --bg:#0B1220; --panel:#121B30; --panel2:#0E1628; --line:#1E2A44;
+  --text:#F1F5F9; --muted:#8CA0BE;
+  --pin:#F59E0B; --mini:#10B981; --io:#3B82F6; --rom:#8B5CF6; --ram:#EC4899; --q:#64748B;
+  --accent:#22D3EE; --ok:#34D399; --err:#F43F5E;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:'Noto Sans SC',system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--bg); color:var(--text); min-height:100vh;
+  background-image:
+    radial-gradient(900px 500px at 50% -10%, rgba(34,211,238,.10), transparent 60%),
+    linear-gradient(rgba(30,42,68,.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30,42,68,.35) 1px, transparent 1px);
+  background-size:auto, 34px 34px, 34px 34px;
+}
+.wrap{max-width:600px;margin:0 auto;padding:18px 14px 40px}
+/* ===== 顶部 ===== */
+.badge{
+  display:inline-flex;align-items:center;gap:7px;padding:4px 12px;border-radius:999px;
+  border:1px solid var(--line);background:var(--panel);color:var(--muted);
+  font-size:12px;font-weight:500;letter-spacing:.06em;margin-bottom:12px;
+}
+.badge svg{width:13px;height:13px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+h1{font-size:clamp(24px,6vw,34px);font-weight:900;letter-spacing:.01em;line-height:1.25}
+.sub{margin-top:6px;color:var(--muted);font-size:clamp(13px,3.2vw,15px);font-weight:400}
+.hint{color:var(--accent);font-weight:700}
+/* ===== 模块进度 ===== */
+.progress{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:18px 0 14px}
+.mchip{
+  position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;
+  padding:9px 4px 7px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--muted);font-size:11px;font-weight:500;text-align:center;transition:all .25s;
+}
+.mchip .dot{width:18px;height:18px;border-radius:6px;border:1px solid var(--line);transition:all .25s}
+.mchip.on{color:var(--text);border-color:currentColor}
+.mchip.on .dot{background:currentColor;border-color:currentColor;box-shadow:0 0 10px rgba(255,255,255,.18)}
+.mchip.on .tick{position:absolute;top:-5px;right:-4px;width:16px;height:16px;border-radius:50%;background:var(--ok);
+  display:flex;align-items:center;justify-content:center;color:#06281C;font-size:10px;font-weight:900}
+.mchip[data-m="pin"]{color:var(--pin)} .mchip[data-m="mini"]{color:var(--mini)}
+.mchip[data-m="io"]{color:var(--io)} .mchip[data-m="rom"]{color:var(--rom)} .mchip[data-m="ram"]{color:var(--ram)}
+/* ===== 棋盘 ===== */
+.board-card{
+  background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;
+  box-shadow:0 12px 34px rgba(0,0,0,.35);
+}
+.stats{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px}
+.stat{display:flex;align-items:baseline;gap:6px}
+.stat .num{font-size:24px;font-weight:900;line-height:1}
+.stat .lbl{font-size:11px;color:var(--muted)}
+.stat.chance .num{color:var(--accent)}
+.stat.time .num{font-size:17px;color:var(--text)}
+#grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;user-select:none}
+.cell{
+  position:relative;aspect-ratio:1;border-radius:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:clamp(9px,2.6vw,13px);color:#0B1220;letter-spacing:.01em;
+  transition:transform .12s ease,box-shadow .12s ease,opacity .3s;
+  text-shadow:0 1px 0 rgba(255,255,255,.25);
+}
+.cell:active{transform:scale(.92)}
+.cell.sel{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 14px rgba(255,255,255,.45);z-index:2}
+.cell.q{background:var(--q);color:#E2E8F0;font-size:clamp(14px,4vw,20px);text-shadow:none}
+.cell.elim{animation:pop .38s ease forwards}
+@keyframes pop{0%{transform:scale(1);opacity:1}55%{transform:scale(1.22);opacity:.9}100%{transform:scale(0);opacity:0}}
+.cell.fall{animation:drop .3s ease}
+@keyframes drop{from{transform:translateY(-18px);opacity:.4}to{transform:translateY(0);opacity:1}}
+.cell[data-t="pin"]{background:var(--pin)} .cell[data-t="mini"]{background:var(--mini)}
+.cell[data-t="io"]{background:var(--io)} .cell[data-t="rom"]{background:var(--rom)}
+.cell[data-t="ram"]{background:var(--ram)}
+/* ===== 底部 ===== */
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:9px;width:100%;
+  padding:13px 16px;border:none;border-radius:14px;cursor:pointer;
+  font-family:inherit;font-size:15px;font-weight:700;color:#06222B;
+  background:linear-gradient(180deg,#3EE0F7,var(--accent));transition:transform .12s,filter .2s;
+}
+.btn:hover{filter:brightness(1.08)} .btn:active{transform:scale(.97)}
+.btn:disabled{background:var(--panel2);color:var(--muted);border:1px solid var(--line);cursor:not-allowed}
+.btn svg{width:17px;height:17px;stroke:#06222B;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.rule{margin-top:12px;color:var(--muted);font-size:12px;line-height:1.8;text-align:center}
+.rule b{color:var(--text);font-weight:500}
+/* ===== 弹窗 ===== */
+.overlay{
+  position:fixed;inset:0;background:rgba(5,9,18,.72);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;padding:18px;z-index:50;
+}
+.overlay.show{display:flex}
+.modal{
+  width:100%;max-width:460px;max-height:88vh;overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);
+}
+.modal h2{font-size:18px;font-weight:900;margin-bottom:4px}
+.modal .msub{color:var(--muted);font-size:12px;margin-bottom:16px}
+.qtag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;color:#0B1220;margin-bottom:12px}
+.qtext{font-size:16px;font-weight:500;line-height:1.7;margin-bottom:16px}
+.opts{display:grid;gap:9px;margin-bottom:14px}
+.opt{
+  text-align:left;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--text);font-family:inherit;font-size:14px;line-height:1.55;cursor:pointer;transition:all .15s;
+}
+.opt:hover{border-color:var(--accent)}
+.opt.correct{border-color:var(--ok);background:rgba(52,211,153,.14);color:var(--ok);font-weight:700}
+.opt.wrong{border-color:var(--err);background:rgba(244,63,94,.14);color:var(--err);font-weight:700}
+.opt:disabled{cursor:default}
+.explain{display:none;padding:11px 13px;border-radius:12px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.3);
+  font-size:13px;line-height:1.7;color:#C9F4FD;margin-bottom:16px}
+.explain.show{display:block}
+.modal .btnrow{display:flex;justify-content:flex-end}
+.btn-small{
+  padding:9px 20px;border-radius:11px;border:none;cursor:pointer;font-family:inherit;
+  font-size:14px;font-weight:700;color:#06222B;background:var(--accent);transition:transform .12s;
+}
+.btn-small:active{transform:scale(.96)}
+/* 结果 */
+.result-hero{text-align:center;padding:6px 0 4px}
+.ring{
+  width:96px;height:96px;border-radius:50%;margin:4px auto 14px;
+  display:flex;align-items:center;justify-content:center;position:relative;
+}
+.ring .rnum{font-size:30px;font-weight:900}
+.rs{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:16px 0 18px}
+.rbox{background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:11px 8px;text-align:center}
+.rbox .rv{font-size:20px;font-weight:900;line-height:1.2}
+.rbox .rl{font-size:11px;color:var(--muted);margin-top:3px}
+.score-line{font-size:13px;color:var(--muted);line-height:1.9;text-align:center}
+/* 姓名输入 */
+.name-row{margin-bottom:12px}
+.name-row input{
+  width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:border-color .2s;
+}
+.name-row input:focus{border-color:var(--accent)}
+.name-row input::placeholder{color:var(--muted)}
+/* 模块掌握列表 */
+.mods{display:grid;gap:7px;margin:14px 0}
+.mod-row{
+  display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:11px;
+  background:var(--panel2);border:1px solid var(--line);font-size:13px;
+}
+.mod-row .mdot{width:12px;height:12px;border-radius:4px;flex:none;opacity:.35;transition:opacity .25s}
+.mod-row.ok .mdot{opacity:1;box-shadow:0 0 8px rgba(255,255,255,.2)}
+.mod-row .mname{font-weight:700;width:80px;flex:none}
+.mod-row .mstat{color:var(--muted);font-size:12px;margin-left:auto}
+.mod-row.ok .mstat{color:var(--ok)}
+/* 次级按钮 */
+.btn-row2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:2px}
+.btn-sm{
+  padding:10px 8px;border-radius:11px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--text);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;
+}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm:active{transform:scale(.97)}
+/* 成绩报告页 */
+.rpt-tip{font-size:12px;color:var(--muted);line-height:1.8;text-align:center;margin-top:14px;padding:10px 12px;border-radius:12px;background:var(--panel2);border:1px dashed var(--line)}
+/* ===== 开始界面 ===== */
+.start-hero{text-align:center;padding:8px 0 6px}
+.start-hero .tile{width:120px;height:120px;margin:0 auto 16px;border-radius:24px;
+  background:var(--panel);border:1px solid var(--line);display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:14px}
+.start-hero .tile i{border-radius:7px}
+.sx{font-size:14px;color:var(--muted);line-height:1.9;margin-bottom:18px}
+.sx b{color:var(--text);font-weight:700}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:14px 0 18px}
+.lg{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text);background:var(--panel2);
+  border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.lg i{width:14px;height:14px;border-radius:4px;flex:none}
+.hide{display:none!important}
+.toast{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+  background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px 18px;border-radius:999px;
+  font-size:13px;opacity:0;pointer-events:none;transition:all .25s;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width:420px){
+  .wrap{padding:12px 10px 30px}
+  .board-card{padding:10px}
+  #grid{gap:5px}
+  .cell{font-size:10px}
+  .stat .num{font-size:20px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ===== 开始界面 ===== -->
+  <section id="view-start">
+    <div class="badge"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/></svg>单片机 · 课堂闯关</div>
+    <h1>51单片机知识消消乐</h1>
+    <p class="sub">硬件结构闯关 · 三消攒机会，<span class="hint">答题亮五环</span></p>
+    <div class="start-hero">
+      <div class="tile" aria-hidden="true">
+        <i style="background:var(--pin)"></i><i style="background:var(--mini)"></i><i style="background:var(--io)"></i>
+        <i style="background:var(--rom)"></i><i style="background:var(--q)"></i><i style="background:var(--ram)"></i>
+        <i style="background:var(--io)"></i><i style="background:var(--rom)"></i><i style="background:var(--pin)"></i>
+      </div>
+    </div>
+    <div class="sx">
+      <b>① 三消攒机会：</b>交换相邻方块，三个同类连成一线即可消除，每消除一次积攒 1 次答题机会；<br>
+      <b>② 答题亮模块：</b>消耗机会答题，答对点亮对应知识点模块；<br>
+      <b>③ 10题结算：</b>共完成 <b>10</b> 道题，答完后五环全部点亮且得分达到 <b>80</b> 分以上，才弹出最终结果。
+    </div>
+    <div class="legend">
+      <div class="lg"><i style="background:var(--pin)"></i>引脚</div>
+      <div class="lg"><i style="background:var(--mini)"></i>最小系统</div>
+      <div class="lg"><i style="background:var(--io)"></i>I/O端口</div>
+      <div class="lg"><i style="background:var(--rom)"></i>程序存储器</div>
+      <div class="lg"><i style="background:var(--ram)"></i>数据存储器</div>
+      <div class="lg"><i style="background:var(--q)"></i>问号 · 双倍机会</div>
+    </div>
+    <div class="name-row">
+      <input id="stu-name" type="text" maxlength="12" placeholder="输入姓名（选填，便于登记成绩）">
+    </div>
+    <button class="btn" id="btn-start"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>开始闯关</button>
+  </section>
+
+  <!-- ===== 游戏界面 ===== -->
+  <section id="view-game" class="hide">
+    <div class="badge"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/></svg>51单片机 · 硬件结构</div>
+    <h1 style="font-size:clamp(20px,5vw,26px)">知识消消乐</h1>
+    <div class="progress" id="progress"></div>
+    <div class="board-card">
+      <div class="stats">
+        <div class="stat"><span class="num" id="stat-score">0</span><span class="lbl">得分</span></div>
+        <div class="stat chance"><span class="num" id="stat-chance">0</span><span class="lbl">答题机会</span></div>
+        <div class="stat time"><span class="num" id="stat-time">00:00</span><span class="lbl">用时</span></div>
+      </div>
+      <div id="grid"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-quiz"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>开始答题（消耗 1 次机会）</button>
+    </div>
+    <p class="rule">交换相邻方块消除同类 · 消除 <b>问号</b> 额外 +1 机会 · 答对 1 题 +10 分</p>
+  </section>
+
+  <!-- ===== 成绩报告页（链接打开模式） ===== -->
+  <section id="view-report" class="hide">
+    <div class="badge"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>51单片机 · 成绩报告单</div>
+    <div class="result-hero">
+      <div class="ring" id="rpt-ring"><span class="rnum" id="rpt-ratio">0%</span></div>
+      <h1 id="rpt-name">匿名同学</h1>
+      <p class="msub">51单片机硬件结构闯关 · 成绩报告</p>
+    </div>
+    <div class="rs">
+      <div class="rbox"><div class="rv" id="rpt-score">0</div><div class="rl">总分</div></div>
+      <div class="rbox"><div class="rv" id="rpt-time">00:00</div><div class="rl">用时</div></div>
+      <div class="rbox"><div class="rv" id="rpt-match">0</div><div class="rl">消除次数</div></div>
+      <div class="rbox"><div class="rv" id="rpt-q">0/0</div><div class="rl">答题</div></div>
+    </div>
+    <div class="mods" id="rpt-mods"></div>
+    <p class="score-line" id="rpt-comment"></p>
+    <p class="rpt-tip">本成绩由学生通关后生成链接分享，打开即展示，无需登录。</p>
+    <div class="actions" style="margin-top:16px">
+      <button class="btn" id="btn-report-back"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>返回游戏首页</button>
+    </div>
+  </section>
+</div>
+
+<!-- ===== 答题弹窗 ===== -->
+<div class="overlay" id="quiz-overlay">
+  <div class="modal">
+    <h2>知识闯关</h2>
+    <p class="msub" id="quiz-msub">请选择正确答案</p>
+    <span class="qtag" id="quiz-tag">模块</span>
+    <p class="qtext" id="quiz-q"></p>
+    <div class="opts" id="quiz-opts"></div>
+    <div class="explain" id="quiz-explain"></div>
+    <div class="btnrow"><button class="btn-small" id="quiz-close">继续挑战</button></div>
+  </div>
+</div>
+
+<!-- ===== 通关弹窗 ===== -->
+<div class="overlay" id="win-overlay">
+  <div class="modal">
+    <div class="result-hero">
+      <div class="ring" id="win-ring"><span class="rnum" id="win-ratio">100%</span></div>
+      <h2 id="win-title">五环点亮 · 闯关成功</h2>
+      <p class="msub" id="win-sub">51单片机硬件结构，你已全部掌握</p>
+    </div>
+    <div class="rs">
+      <div class="rbox"><div class="rv" id="win-score">0</div><div class="rl">总分</div></div>
+      <div class="rbox"><div class="rv" id="win-time">00:00</div><div class="rl">用时</div></div>
+      <div class="rbox"><div class="rv" id="win-match">0</div><div class="rl">消除次数</div></div>
+      <div class="rbox"><div class="rv" id="win-acc">0%</div><div class="rl">答题正确率</div></div>
+    </div>
+    <p class="score-line" id="win-comment"></p>
+    <div class="mods" id="win-mods"></div>
+    <div class="btn-row2">
+      <button class="btn-sm" id="btn-copy-txt">复制成绩单</button>
+      <button class="btn-sm" id="btn-copy-url">复制成绩链接</button>
+    </div>
+    <div class="actions" style="margin-top:16px">
+      <button class="btn" id="btn-again"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>再玩一次</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===================== 三消引擎 =====================
+var ROWS=6, COLS=6;
+var TYPES=['pin','mini','io','rom','ram'];
+var TYPE_LABEL={pin:'引脚',mini:'最小系统',io:'I/O口',rom:'ROM',ram:'RAM'};
+var MODULE_NAME={pin:'引脚',mini:'最小系统',io:'I/O端口',rom:'程序存储器',ram:'数据存储器'};
+var MOD_COLOR={pin:'var(--pin)',mini:'var(--mini)',io:'var(--io)',rom:'var(--rom)',ram:'var(--ram)'};
+
+var board=[], score=0, chances=0, matchCount=0, sel=null, busy=false;
+var started=false, t0=0, timerId=null;
+var modules={pin:0,mini:0,io:0,rom:0,ram:0};
+var used={}, curQ=null, answered=false, totalQ=0, correctQ=0;
+var stuName='', needStats={pin:{ok:0,total:0},mini:{ok:0,total:0},io:{ok:0,total:0},rom:{ok:0,total:0},ram:{ok:0,total:0}};
+
+function rnd(n){return Math.floor(Math.random()*n)}
+function randType(){return TYPES[rnd(TYPES.length)]}
+function swapArr(r1,c1,r2,c2){var t=board[r1][c1];board[r1][c1]=board[r2][c2];board[r2][c2]=t}
+
+function formsMatch(y,x,t){
+  if(x>=2 && board[y][x-1]===t && board[y][x-2]===t) return true;
+  if(y>=2 && board[y-1][x]===t && board[y-2][x]===t) return true;
+  return false;
+}
+function initBoard(){
+  for(var y=0;y<ROWS;y++){board[y]=[];for(var x=0;x<COLS;x++){var t;do{t=randType()}while(formsMatch(y,x,t));board[y][x]=t;}}
+  var placed=0,guard=0;
+  while(placed<3 && guard<600){
+    guard++;
+    var y=rnd(ROWS),x=rnd(COLS);
+    if(board[y][x]!=='q'){board[y][x]='q';placed++;}
+  }
+}
+function findMatches(){
+  var s={};
+  for(var y=0;y<ROWS;y++){
+    var st=0;
+    for(var x=1;x<=COLS;x++){
+      if(x<COLS && board[y][x]===board[y][x-1]) continue;
+      var len=x-st;
+      if(len>=3){for(var k=st;k<x;k++)s[y*COLS+k]=1}
+      st=x;
+    }
+  }
+  for(var x=0;x<COLS;x++){
+    var st2=0;
+    for(var y2=1;y2<=ROWS;y2++){
+      if(y2<ROWS && board[y2][x]===board[y2-1][x]) continue;
+      var len2=y2-st2;
+      if(len2>=3){for(var k2=st2;k2<y2;k2++)s[k2*COLS+x]=1}
+      st2=y2;
+    }
+  }
+  var out=[];
+  for(var key in s) out.push(+key);
+  return out;
+}
+function resolve(){
+  var m=findMatches();
+  if(m.length===0){ if(!hasMove()){toast('没有可消除的搭配，已重新排列');shuffleBoard();render();} busy=false; return; }
+  matchCount++;
+  var qBonus=0;
+  m.forEach(function(idx){ if(board[Math.floor(idx/COLS)][idx%COLS]==='q') qBonus++; });
+  chances += 1 + qBonus;
+  updateHUD();
+  m.forEach(function(idx){ var el=cellEl(Math.floor(idx/COLS),idx%COLS); if(el) el.classList.add('elim'); });
+  setTimeout(function(){
+    m.forEach(function(idx){ board[Math.floor(idx/COLS)][idx%COLS]=null; });
+    for(var x=0;x<COLS;x++){
+      var w=ROWS-1;
+      for(var y=ROWS-1;y>=0;y--){
+        if(board[y][x]!==null){ if(w!==y){board[w][x]=board[y][x];board[y][x]=null;} w--; }
+      }
+      for(var y2=w;y2>=0;y2--){var t;do{t=randType()}while(formsMatch(y2,x,t));board[y2][x]=t;}
+    }
+    render();
+    if(findMatches().length>0){ setTimeout(resolve,170); }
+    else{ if(!hasMove()){toast('没有可消除的搭配，已重新排列');shuffleBoard();render();} busy=false; }
+  },380);
+}
+function hasMove(){
+  for(var y=0;y<ROWS;y++)for(var x=0;x<COLS;x++){
+    if(x+1<COLS){
+      swapArr(y,x,y,x+1);
+      var hit=findMatches().length>0;
+      swapArr(y,x,y,x+1);
+      if(hit) return true;
+    }
+    if(y+1<ROWS){
+      swapArr(y,x,y+1,x);
+      var hit2=findMatches().length>0;
+      swapArr(y,x,y+1,x);
+      if(hit2) return true;
+    }
+  }
+  return false;
+}
+function shuffleBoard(){
+  for(var y=0;y<ROWS;y++)for(var x=0;x<COLS;x++){var t;do{t=randType()}while(formsMatch(y,x,t));board[y][x]=t;}
+  var placed=0,guard=0;
+  while(placed<3 && guard<600){
+    guard++;
+    var yy=rnd(ROWS),xx=rnd(COLS);
+    if(board[yy][xx]!=='q'){board[yy][xx]='q';placed++;}
+  }
+}
+function trySwap(r1,c1,r2,c2){
+  swapArr(r1,c1,r2,c2);
+  if(findMatches().length>0){ busy=true; render(); resolve(); }
+  else{ swapArr(r1,c1,r2,c2); toast('这样交换无法消除，请换个位置'); }
+}
+
+// ===================== 题库（51单片机硬件结构） =====================
+var BANK={
+pin:[
+ {q:'AT89C51单片机（DIP封装）共有多少个引脚？',o:['28个','40个','44个','64个'],a:1,e:'AT89C51采用40引脚DIP封装，其中P0~P3四组I/O口占32个引脚，其余为电源、晶振、复位等专用引脚。'},
+ {q:'单片机RST引脚的功能是（ ）。',o:['时钟输入','复位','电源输入','接地'],a:1,e:'RST为复位引脚，输入高电平并持续两个机器周期即可使单片机复位。'},
+ {q:'晶振电路应连接在XTAL1和XTAL2两个引脚之间，这两个引脚是（ ）。',o:['18、19脚','20、40脚','9、10脚','29、30脚'],a:0,e:'XTAL1为18脚、XTAL2为19脚，晶振两端还各接一个约30pF的电容到地。'},
+ {q:'第40脚VCC应接（ ）。',o:['地','复位信号','晶振','+5V电源'],a:3,e:'VCC接+5V电源，GND（第20脚）接地，构成供电回路。'},
+ {q:'EA引脚接高电平时，单片机（ ）。',o:['只访问外部程序存储器','禁止运行','优先访问内部程序存储器','自动复位'],a:2,e:'EA=1时优先访问内部程序存储器，超出内部容量范围后才访问外部程序存储器。'},
+ {q:'4组I/O口共占用（ ）个引脚。',o:['8个','16个','32个','40个'],a:2,e:'P0~P3每组8位，4组共32个引脚，其余8个引脚为电源、晶振、复位等专用引脚。'}
+],
+mini:[
+ {q:'单片机最小系统由（ ）三部分组成。',o:['电源、晶振电路、复位电路','电源、LED、按键','晶振、数码管、电源','复位、按键、显示'],a:0,e:'最小系统=电源+晶振电路+复位电路，三者缺一不可。'},
+ {q:'上电复位电路通常由（ ）组成。',o:['电容和电阻','电感和电容','二极管','三极管'],a:0,e:'上电瞬间RST经电容充电保持高电平，随后通过电阻放电恢复低电平，实现自动复位。'},
+ {q:'单片机复位后，程序计数器PC的值为（ ）。',o:['FFFFH','0080H','任意值','0000H'],a:3,e:'复位后PC=0000H，程序从0000H地址开始执行。'},
+ {q:'复位后，程序从（ ）地址开始执行。',o:['0000H','0003H','0FFFH','8000H'],a:0,e:'复位后PC=0000H，第一条指令从0000H单元取出。'},
+ {q:'晶振两端通常各接一个（ ）到地。',o:['约30pF的电容','约10kΩ的电阻','电感','二极管'],a:0,e:'晶振电路由晶振和两个约30pF的负载电容组成，电容一端接晶振引脚、一端接地。'},
+ {q:'单片机复位后，P1口各引脚输出（ ）。',o:['低电平','高电平','高阻态','不确定'],a:1,e:'复位后P0~P3各口输出均为高电平（P1=0xFF）。'}
+],
+io:[
+ {q:'51单片机共有（ ）组I/O口。',o:['2组','3组','5组','4组'],a:3,e:'51单片机共有P0、P1、P2、P3四组I/O口。'},
+ {q:'哪组I/O口为开漏输出，使用时需要外接上拉电阻？',o:['P0口','P1口','P2口','P3口'],a:0,e:'P0口内部无上拉电阻，作通用I/O口时需外接上拉电阻。'},
+ {q:'P3口除作I/O口外，还兼有（ ）第二功能。',o:['高8位地址','低8位地址','串口、外部中断、定时器计数等','无第二功能'],a:2,e:'P3口各引脚兼有串口通信（RXD/TXD）、外部中断（INT0/INT1）、定时器计数（T0/T1）等第二功能。'},
+ {q:'LED正极接电源、负极经电阻接I/O口，I/O口输出（ ）时LED点亮。',o:['高电平','低电平','高阻态','任意'],a:1,e:'I/O口输出低电平使LED两端形成电压差，LED导通点亮。'},
+ {q:'每组I/O口有（ ）位。',o:['4位','6位','8位','16位'],a:2,e:'P0~P3每组都是8位并行I/O口。'},
+ {q:'访问外部存储器时，P2口兼作（ ）。',o:['高8位地址总线','低8位地址总线','数据总线','控制总线'],a:0,e:'P2口作高8位地址总线，P0口分时传送低8位地址和数据。'}
+],
+rom:[
+ {q:'程序存储器的作用是（ ）。',o:['存放运行时的变量','存放程序代码（指令）','存放键盘数据','存放显示数据'],a:1,e:'程序存储器（ROM）用于存放程序指令代码，CPU上电后从中取指令执行。'},
+ {q:'AT89C51内部程序存储器（Flash）的容量是（ ）。',o:['128字节','64KB','256字节','4KB'],a:3,e:'AT89C51内部集成4KB Flash程序存储器，可擦写多次。'},
+ {q:'程序存储器属于（ ）存储器。',o:['只读存储器ROM','随机存储器RAM','可改写寄存器','缓存'],a:0,e:'程序存储器是只读存储器（ROM），正常运行时只读不写。'},
+ {q:'断电后，程序存储器中的数据（ ）。',o:['不会丢失','立即丢失','部分丢失','随机变化'],a:0,e:'ROM是非易失性存储器，断电后程序代码依然保留。'},
+ {q:'AT89C51内部程序存储器的地址范围是（ ）。',o:['0000H~0FFFH','00H~7FH','80H~FFH','0000H~FFFFH'],a:0,e:'4KB容量对应地址0000H~0FFFH。'},
+ {q:'上电后，CPU从（ ）中取出第一条指令执行。',o:['数据存储器','特殊功能寄存器','程序存储器','外部RAM'],a:2,e:'CPU复位后PC=0000H，从程序存储器的0000H单元开始取指令。'}
+],
+ram:[
+ {q:'数据存储器（RAM）的作用是（ ）。',o:['存放程序代码','存放运行时数据和变量','存放时钟信号','存放晶振频率'],a:1,e:'数据存储器（RAM）用于存放运行过程中产生的数据、变量和中间结果。'},
+ {q:'AT89C51内部数据存储器（RAM）的容量是（ ）。',o:['4KB','64KB','1KB','128字节'],a:3,e:'AT89C51内部RAM为128字节（00H~7FH）。'},
+ {q:'内部RAM的地址范围是（ ）。',o:['0000H~0FFFH','00H~7FH','80H~FFH','0000H~FFFFH'],a:1,e:'128字节RAM对应地址00H~7FH，高128字节（80H~FFH）为特殊功能寄存器区。'},
+ {q:'特殊功能寄存器（SFR，如TMOD、IE）的地址位于（ ）区域。',o:['80H~FFH','00H~7FH','0000H~0FFFH','任意'],a:0,e:'SFR的地址范围为80H~FFH，通过直接寻址访问。'},
+ {q:'断电后，数据存储器中的数据（ ）。',o:['丢失','不会丢失','保持不变','部分丢失'],a:0,e:'RAM是易失性存储器，断电后数据全部丢失。'},
+ {q:'程序中的变量一般存放在（ ）中。',o:['程序存储器','数据存储器（RAM）','晶振电路','复位电路'],a:1,e:'C51程序中定义的变量存放在数据存储器（RAM）中，程序运行时实时读写。'}
+]
+};
+// ===================== 界面与交互 =====================
+var $=function(id){return document.getElementById(id)};
+var gridEl=$('grid');
+var toastTimer=null;
+function toast(msg){
+  var t=$('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show')},1800);
+}
+function cellEl(r,c){return gridEl.querySelector('.cell[data-r="'+r+'"][data-c="'+c+'"]')}
+function render(){
+  gridEl.innerHTML='';
+  for(var y=0;y<ROWS;y++)for(var x=0;x<COLS;x++){
+    var d=document.createElement('div');
+    var t=board[y][x];
+    d.className='cell'+(t==='q'?' q':'');
+    d.dataset.t=t; d.dataset.r=y; d.dataset.c=x;
+    d.textContent=(t==='q')?'?':TYPE_LABEL[t];
+    if(sel && sel.r===y && sel.c===x) d.classList.add('sel');
+    gridEl.appendChild(d);
+  }
+}
+function renderProgress(){
+  var box=$('progress');
+  box.innerHTML='';
+  Object.keys(MODULE_NAME).forEach(function(m){
+    var d=document.createElement('div');
+    d.className='mchip'+(modules[m]?' on':'');
+    d.dataset.m=m;
+    d.innerHTML='<span class="dot"></span>'+MODULE_NAME[m]+(modules[m]?'<span class="tick">✓</span>':'');
+    box.appendChild(d);
+  });
+}
+function updateHUD(){
+  $('stat-score').textContent=score;
+  $('stat-chance').textContent=chances;
+}
+function fmt(s){
+  var m=Math.floor(s/60), ss=s%60;
+  return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+}
+function startTimer(){ t0=Date.now(); clearInterval(timerId); timerId=setInterval(function(){
+  $('stat-time').textContent=fmt(Math.floor((Date.now()-t0)/1000));
+},500); }
+function stopTimer(){ clearInterval(timerId); }
+
+gridEl.addEventListener('click',function(e){
+  var cell=e.target.closest('.cell');
+  if(!cell || busy || !started) return;
+  var r=+cell.dataset.r, c=+cell.dataset.c;
+  if(!sel){ sel={r:r,c:c}; render(); return; }
+  if(sel.r===r && sel.c===c){ sel=null; render(); return; }
+  if(Math.abs(sel.r-r)+Math.abs(sel.c-c)===1){
+    var s={r:sel.r,c:sel.c}; sel=null; trySwap(s.r,s.c,r,c);
+  }else{ sel={r:r,c:c}; render(); }
+});
+
+// ----- 答题 -----
+function drawQuestion(){
+  var unlocked=Object.keys(modules).filter(function(m){return !modules[m]});
+  var pool=unlocked.length?unlocked:Object.keys(modules);
+  var mod=pool[rnd(pool.length)];
+  var list=BANK[mod];
+  if(!used[mod]) used[mod]={};
+  var fresh=list.map(function(_,i){return i}).filter(function(i){return !used[mod][i]});
+  var idx;
+  if(fresh.length){ idx=fresh[rnd(fresh.length)]; }
+  else{ used[mod]={}; idx=rnd(list.length); }
+  used[mod][idx]=1;
+  return {mod:mod,q:list[idx]};
+}
+function openQuiz(){
+  if(!started) return;
+  if(chances<=0){ toast('答题机会不足，先完成三消攒机会'); return; }
+  chances--; updateHUD();
+  var dq=drawQuestion();
+  curQ=dq; answered=false;
+  $('quiz-msub').textContent='第 '+(totalQ+1)+' / 10 题 · 请选择正确答案';
+  $('quiz-tag').textContent=MODULE_NAME[dq.mod];
+  $('quiz-tag').style.background=MOD_COLOR[dq.mod];
+  $('quiz-q').textContent=dq.q.q;
+  var box=$('quiz-opts');
+  box.innerHTML='';
+  dq.q.o.forEach(function(t,i){
+    var b=document.createElement('button');
+    b.className='opt';
+    b.textContent='ABCD'[i]+'、'+t;
+    b.onclick=function(){answer(i)};
+    box.appendChild(b);
+  });
+  $('quiz-explain').className='explain';
+  $('quiz-overlay').classList.add('show');
+}
+function answer(i){
+  if(answered) return;
+  answered=true;
+  totalQ++;
+  needStats[curQ.mod].total++;
+  var q=curQ.q;
+  var btns=document.querySelectorAll('#quiz-opts .opt');
+  btns.forEach(function(b,k){
+    b.disabled=true;
+    if(k===q.a) b.classList.add('correct');
+    else if(k===i) b.classList.add('wrong');
+  });
+  var ex=$('quiz-explain');
+  if(i===q.a){
+    correctQ++; score+=10; updateHUD();
+    needStats[curQ.mod].ok++;
+    modules[curQ.mod]=1; renderProgress();
+    ex.textContent='回答正确！'+q.e;
+  }else{
+    ex.textContent='回答错误。正确答案：'+('ABCD'[q.a])+'。'+q.e;
+  }
+  ex.classList.add('show');
+  if(totalQ>=10){
+    var allLit=Object.keys(modules).every(function(m){return modules[m]});
+    setTimeout(function(){showWin(allLit && score>=80)},700);
+  }
+}
+$('btn-quiz').onclick=openQuiz;
+$('quiz-close').onclick=function(){ $('quiz-overlay').classList.remove('show'); };
+
+// ----- 开始 / 重玩 -----
+function resetGame(){
+  $('win-overlay').classList.remove('show');
+  $('quiz-overlay').classList.remove('show');
+  score=0; chances=0; matchCount=0; sel=null; busy=false;
+  modules={pin:0,mini:0,io:0,rom:0,ram:0};
+  needStats={pin:{ok:0,total:0},mini:{ok:0,total:0},io:{ok:0,total:0},rom:{ok:0,total:0},ram:{ok:0,total:0}};
+  used={}; totalQ=0; correctQ=0; curQ=null;
+  $('stat-time').textContent='00:00';
+  initBoard(); render(); renderProgress(); updateHUD();
+}
+$('btn-start').onclick=function(){
+  stuName=$('stu-name').value.trim();
+  $('view-start').classList.add('hide');
+  $('view-game').classList.remove('hide');
+  resetGame();
+  started=true;
+  startTimer();
+};
+$('btn-again').onclick=function(){
+  resetGame();
+  started=true;
+  startTimer();
+};
+
+// ----- 通关 / 成绩 -----
+function evalComment(acc){
+  if(acc>=90) return '掌握扎实，五环全亮，是当之无愧的单片机小能手！';
+  if(acc>=70) return '硬件结构已基本掌握，稍加复习就能满分通关。';
+  if(acc>=50) return '闯关成功！建议重点复习答错的模块，再翻一遍教材。';
+  return '恭喜通关！答错的题目记得回看教材，再来一次会更好。';
+}
+function renderMods(box){
+  box.innerHTML='';
+  Object.keys(MODULE_NAME).forEach(function(m){
+    var st=needStats[m], tot=st.total, okN=st.ok;
+    var d=document.createElement('div');
+    d.className='mod-row'+(modules[m]?' ok':'');
+    d.innerHTML='<span class="mdot" style="background:'+MOD_COLOR[m]+'"></span><span class="mname">'+MODULE_NAME[m]+'</span><span class="mstat">'+(tot?'答对 '+okN+'/'+tot+' 题':'未作答')+(modules[m]?' · 已点亮':' · 未点亮')+'</span>';
+    box.appendChild(d);
+  });
+}
+function buildReportText(){
+  var acc=totalQ?Math.round(correctQ/totalQ*100):0;
+  var passed=totalQ>=10 && Object.keys(modules).every(function(m){return modules[m]}) && score>=80;
+  var lines=['【51单片机知识消消乐 · 成绩单】','姓名：'+(stuName||'匿名同学'),'通关状态：'+(passed?'已通关':'未达标（需完成10题且五环点亮、80分以上）'),'得分：'+score+'分    用时：'+fmt(Math.floor((Date.now()-t0)/1000)),'答题正确率：'+acc+'%（答对 '+correctQ+' 题 / 共 '+totalQ+' 题）','消除次数：'+matchCount+' 次','模块掌握：'];
+  Object.keys(MODULE_NAME).forEach(function(m){
+    var st=needStats[m];
+    lines.push((modules[m]?'✓ ':'✗ ')+MODULE_NAME[m]+'（'+(st.total?'答对 '+st.ok+'/'+st.total+' 题':'未作答')+'）');
+  });
+  lines.push('评价：'+evalComment(acc));
+  return lines.join('\n');
+}
+function buildReportUrl(){
+  var u=location.href.split('?')[0];
+  var lit=Object.keys(modules).filter(function(m){return modules[m]}).join(',');
+  var acc=totalQ?Math.round(correctQ/totalQ*100):0;
+  var passed=totalQ>=10 && Object.keys(modules).every(function(m){return modules[m]}) && score>=80;
+  return u+'?stu='+encodeURIComponent(stuName||'匿名同学')+'&score='+score+'&time='+Math.floor((Date.now()-t0)/1000)+'&acc='+acc+'&match='+matchCount+'&q='+correctQ+'/'+totalQ+'&ok='+(passed?'1':'0')+'&lit='+lit;
+}
+function copyText(txt,okMsg){
+  function fallback(){
+    var ta=document.createElement('textarea');
+    ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.focus();ta.select();
+    try{document.execCommand('copy');toast(okMsg||'已复制')}
+    catch(e){toast('复制失败，请手动复制')}
+    document.body.removeChild(ta);
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){toast(okMsg||'已复制')})['catch'](fallback);
+  }else fallback();
+}
+function showWin(passed){
+  passed = passed!==false;
+  stopTimer();
+  $('quiz-overlay').classList.remove('show');
+  var s=Math.floor((Date.now()-t0)/1000);
+  var acc=totalQ?Math.round(correctQ/totalQ*100):0;
+  $('win-score').textContent=score;
+  $('win-time').textContent=fmt(s);
+  $('win-match').textContent=matchCount;
+  $('win-acc').textContent=acc+'%';
+  $('win-ratio').textContent=acc+'%';
+  var deg=Math.max(0,Math.min(100,acc))*3.6;
+  $('win-ring').style.background='conic-gradient('+(passed?'var(--ok)':'var(--err)')+' '+deg+'deg, #1E2A44 0deg)';
+  if(passed){
+    $('win-title').textContent='五环点亮 · 闯关成功';
+    $('win-sub').textContent='51单片机硬件结构，你已全部掌握';
+    $('win-comment').textContent=evalComment(acc);
+  }else{
+    var left=Object.keys(modules).filter(function(m){return !modules[m]}).length;
+    var gap=80-score;
+    var miss=[];
+    if(gap>0) miss.push('还差 '+gap+' 分');
+    if(left>0) miss.push('还有 '+left+' 个模块未点亮');
+    $('win-title').textContent='本次闯关未达标';
+    $('win-sub').textContent='10 题已完成，'+miss.join('、');
+    $('win-comment').textContent='未达到通关标准（五环点亮且 80 分以上），建议复习答错的模块后再试一次。';
+  }
+  renderMods($('win-mods'));
+  $('win-overlay').classList.add('show');
+}
+$('btn-copy-txt').onclick=function(){copyText(buildReportText(),'成绩单已复制，粘贴到班级群即可')};
+$('btn-copy-url').onclick=function(){copyText(buildReportUrl(),'成绩链接已复制，发送给老师即可查看')};
+
+// ----- 成绩报告页（链接打开模式） -----
+function showReport(p){
+  $('view-start').classList.add('hide');
+  $('view-game').classList.add('hide');
+  $('view-report').classList.remove('hide');
+  var name=p.get('stu')||'匿名同学';
+  var scoreV=+p.get('score')||0;
+  var timeV=+p.get('time')||0;
+  var acc=+p.get('acc')||0;
+  var matchV=+p.get('match')||0;
+  var q=(p.get('q')||'0/0').split('/');
+  var lit=(p.get('lit')||'').split(',').filter(Boolean);
+  var okP=p.get('ok')==='1';
+  $('rpt-name').textContent=name;
+  $('rpt-ratio').textContent=acc+'%';
+  $('rpt-ring').style.background='conic-gradient(var(--ok) '+(acc*3.6)+'deg, #1E2A44 0deg)';
+  $('rpt-score').textContent=scoreV;
+  $('rpt-time').textContent=fmt(timeV);
+  $('rpt-match').textContent=matchV;
+  $('rpt-q').textContent=(q[0]||0)+'/'+(q[1]||0);
+  var box=$('rpt-mods');
+  box.innerHTML='';
+  Object.keys(MODULE_NAME).forEach(function(m){
+    var on=lit.indexOf(m)>-1;
+    var d=document.createElement('div');
+    d.className='mod-row'+(on?' ok':'');
+    d.innerHTML='<span class="mdot" style="background:'+MOD_COLOR[m]+'"></span><span class="mname">'+MODULE_NAME[m]+'</span><span class="mstat">'+(on?'已点亮':'未点亮')+'</span>';
+    box.appendChild(d);
+  });
+  $('rpt-comment').textContent=okP?evalComment(acc):'未达到通关标准（需完成10题且五环点亮、80分以上）。';
+}
+$('btn-report-back').onclick=function(){
+  try{ history.replaceState(null,'',location.pathname); }
+  catch(e){ location.href=location.pathname; return; }
+  $('view-report').classList.add('hide');
+  $('view-start').classList.remove('hide');
+};
+
+// ----- 页面初始化 -----
+(function(){
+  if(location.search){
+    try{
+      var p=new URLSearchParams(location.search);
+      if(p.get('score')!==null){ showReport(p); return; }
+    }catch(e){}
+  }
+  $('view-start').classList.remove('hide');
+})();
+</script>
+</body>
+</html>
